@@ -1,0 +1,282 @@
+<meta charset="utf-8">
+<title>HeatFormer vs MAMMA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: two method sections, each = camera-0 video with mesh overlay | 3D scene, then its own play controls.
+   Palette and type follow the earlier rally_3d_vis pages. */
+:root{
+  --ground:#eef1ec; --panel:#ffffff; --panel-2:#f6f8f4; --line:#d3dbd2;
+  --ink:#181f1b; --ink-2:#4b5751; --ink-3:#7c8a83;
+  --accent:#0f7a5a; --accent-soft:#d7ece3;
+  --pA:#e07b24; --pB:#2f6fe0;
+  --scene-bg:#cfd8cf;
+  --shadow:0 1px 2px rgba(24,31,27,.06),0 8px 24px rgba(24,31,27,.05);
+  --f-ui:"IBM Plex Sans",system-ui,"Noto Sans TC","PingFang TC",sans-serif;
+  --f-head:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,"Noto Sans TC",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --ground:#0e1412; --panel:#151d1a; --panel-2:#1b2521; --line:#2b3733;
+  --ink:#e8efea; --ink-2:#a3b2ab; --ink-3:#71827b;
+  --accent:#3ecfa0; --accent-soft:#12302a;
+  --pA:#ff9a52; --pB:#6c9dff;
+  --scene-bg:#0f1714;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0e1412; --panel:#151d1a; --panel-2:#1b2521; --line:#2b3733;
+  --ink:#e8efea; --ink-2:#a3b2ab; --ink-3:#71827b;
+  --accent:#3ecfa0; --accent-soft:#12302a;
+  --pA:#ff9a52; --pB:#6c9dff;
+  --scene-bg:#0f1714;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--f-ui);font-size:14px;line-height:1.55;
+  padding-block:20px 28px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  max-width:1560px;margin:0 auto}
+h2,h3{font-family:var(--f-head);margin:0;text-wrap:balance}
+button{font:inherit;font-size:12.5px;color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:4px 11px;cursor:pointer}
+button:hover{border-color:var(--accent);color:var(--accent)}
+button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+button:focus-visible,input:focus-visible,canvas:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 14px;margin-bottom:26px}
+@media (max-width:980px){.pair{grid-template-columns:1fr}}
+.pair-hd{grid-column:1/-1;display:flex;align-items:baseline;gap:6px 12px;flex-wrap:wrap}
+.pair-hd h2{font-size:19px}
+.pair-hd .tagm{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:1px 7px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);overflow:hidden;min-width:0}
+.card-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line)}
+.card-hd h3{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
+.card-hd span{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3)}
+.tile{position:relative;background:#000;aspect-ratio:8/5;max-width:100%}
+.tile video{width:100%;height:100%;display:block;object-fit:contain}
+.tile canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.scene{position:relative;aspect-ratio:8/5;max-width:100%;background:var(--scene-bg)}
+.scene canvas{width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+.scene canvas:active{cursor:grabbing}
+.loading{position:absolute;left:10px;top:9px;font-size:12px;color:var(--ink-2);background:var(--panel);border:1px solid var(--line);padding:2px 8px;border-radius:4px}
+
+.transport{grid-column:1/-1;display:flex;align-items:center;gap:10px 12px;flex-wrap:wrap;padding:10px 14px}
+.play{min-width:74px;font-weight:600;font-size:13px;padding:5px 13px}
+.readout{font-family:var(--f-mono);font-size:13px;color:var(--ink-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.readout b{color:var(--ink)}
+.transport input[type=range]{flex:1 1 220px;min-width:140px;accent-color:var(--accent)}
+.speeds{display:flex;gap:4px}
+.speeds button{font-family:var(--f-mono)}
+</style>
+
+<div id="pairs"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+<script>
+(function(){
+const FLOOR=0.5;            // world origin is 0.5 m above the floor, y points down
+const CAM='0';              // the one camera shown
+const METHODS=[{key:'hf', name:'HeatFormer 5 鏡頭', tag:'ft_B_1103_v1'},
+               {key:'gt', name:'MAMMA', tag:'1103_smpl'}];
+const PL=['0','1'];
+const tok=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const COL={'0':()=>tok('--pA')||'#e07b24','1':()=>tok('--pB')||'#2f6fe0'};
+let META=null, CAMS=null, NF=2, F0=0, FPS=50;
+
+const mat={}, ovMat={};
+PL.forEach(p=>{
+  mat[p]=new THREE.MeshStandardMaterial({color:new THREE.Color(COL[p]()),roughness:.55,metalness:.05,side:THREE.DoubleSide});
+  ovMat[p]=new THREE.MeshStandardMaterial({color:new THREE.Color(COL[p]()),roughness:.6,transparent:true,opacity:.6,side:THREE.DoubleSide});
+});
+const geo={hf:{},gt:{}}, VERT={hf:{},gt:{}};
+
+// ---------- page ----------
+const pairsEl=document.getElementById('pairs');
+const rows={};
+METHODS.forEach(m=>{
+  const s=document.createElement('section'); s.className='pair'; s.setAttribute('aria-label',m.name);
+  s.innerHTML=`<div class="pair-hd"><h2>${m.name}</h2><span class="tagm">${m.tag}</span></div>
+    <div class="card"><div class="card-hd"><h3>影片 + mesh 疊圖</h3><span>view ${CAM}</span></div>
+      <div class="tile"><video muted playsinline preload="auto"></video><canvas></canvas></div></div>
+    <div class="card"><div class="card-hd"><h3>3D 重建 · 世界座標</h3><span>拖曳旋轉 · 滾輪縮放</span></div>
+      <div class="scene"><canvas aria-label="${m.name} 3D 場景，拖曳旋轉"></canvas><span class="loading">正在載入 mesh…</span></div></div>
+    <div class="card transport">
+      <button class="play" id="play-${m.key}">播放</button>
+      <span class="readout">frame <b class="fnum">000</b> / <span class="fmax">0</span> · t <b class="tsec">0.00</b> s</span>
+      <input type="range" id="scrub-${m.key}" min="0" max="1" value="0" step="1" aria-label="${m.name} 時間軸">
+      <div class="speeds" role="group" aria-label="${m.name} 播放速度">
+        <button data-r="0.25">0.25×</button><button data-r="0.5">0.5×</button><button data-r="1" aria-pressed="true">1×</button>
+      </div>
+    </div>`;
+  pairsEl.appendChild(s);
+  rows[m.key]={key:m.key, video:s.querySelector('video'), ov:s.querySelector('.tile canvas'), scv:s.querySelector('.scene canvas'),
+    loading:s.querySelector('.loading'), play:s.querySelector('.play'), scrub:s.querySelector('input[type=range]'),
+    fnum:s.querySelector('.fnum'), fmax:s.querySelector('.fmax'), tsec:s.querySelector('.tsec'),
+    speeds:[...s.querySelectorAll('.speeds button')], cur:-1, playing:false, rate:1};
+});
+
+// ---------- 3D scenes ----------
+function seg(pts,color,op){
+  const g=new THREE.BufferGeometry().setFromPoints(pts.map(p=>new THREE.Vector3(...p)));
+  return new THREE.Line(g,new THREE.LineBasicMaterial({color,transparent:op<1,opacity:op??1}));
+}
+const W2T=(x,y,z)=>[-x,FLOOR-y,z];
+function buildCourt(scene){
+  const surround=new THREE.Mesh(new THREE.PlaneGeometry(14,24),new THREE.MeshStandardMaterial({color:0x2c5e45,roughness:.95}));
+  surround.rotation.x=-Math.PI/2; surround.position.y=-0.004; scene.add(surround);
+  const court=new THREE.Mesh(new THREE.PlaneGeometry(6.10,13.40),new THREE.MeshStandardMaterial({color:0x1f8a55,roughness:.9}));
+  court.rotation.x=-Math.PI/2; court.position.y=-0.002; scene.add(court);
+  const L=6.70, Wd=3.05, Ws=2.59, lineMat=new THREE.MeshBasicMaterial({color:0xf4f6f2});
+  const strip=(x0,z0,x1,z1)=>{const w=0.04, dx=x1-x0, dz=z1-z0, len=Math.hypot(dx,dz)+w;
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(dx?len:w,dz?len:w),lineMat);
+    m.rotation.x=-Math.PI/2; m.position.set((x0+x1)/2,0.001,(z0+z1)/2); scene.add(m);};
+  [-Wd,-Ws,Ws,Wd].forEach(x=>strip(x,-L,x,L));
+  [-L,-5.94,-1.98,1.98,5.94,L].forEach(z=>strip(-Wd,z,Wd,z));
+  strip(0,1.98,0,L); strip(0,-1.98,0,-L);
+  const SW=3.05, nh=1.55, top=1.524, posts=new THREE.MeshStandardMaterial({color:0xe9ece8,roughness:.6});
+  [-SW,SW].forEach(x=>{const p=new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,nh,10),posts);p.position.set(x,nh/2,0);scene.add(p);});
+  const nm=new THREE.Mesh(new THREE.PlaneGeometry(SW*2,0.76),new THREE.MeshBasicMaterial({color:0x1b1f1d,transparent:true,opacity:.28,side:THREE.DoubleSide,depthWrite:false}));
+  nm.position.set(0,top-0.38,0); scene.add(nm);
+  scene.add(seg([[-SW,top,0],[SW,top,0]],0xffffff,.95)); scene.add(seg([[-SW,top-0.76,0],[SW,top-0.76,0]],0x9aa39e,.6));
+}
+function lights(scene){
+  scene.add(new THREE.HemisphereLight(0xffffff,0x3d4a44,1.25));
+  const k=new THREE.DirectionalLight(0xffffff,1.15); k.position.set(5,10,6); scene.add(k);
+  const f=new THREE.DirectionalLight(0xffffff,.4); f.position.set(-6,4,-5); scene.add(f);
+}
+const views=METHODS.map(m=>{
+  const canvas=rows[m.key].scv;
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true}); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  const scene=new THREE.Scene(); scene.background=new THREE.Color(tok('--scene-bg')||'#cfd8cf');
+  lights(scene); buildCourt(scene);
+  const camG=new THREE.Group(); scene.add(camG);
+  return {key:m.key, canvas, renderer, scene, camG, cam:new THREE.PerspectiveCamera(40,1.6,0.1,200)};
+});
+// orbit, shared by both scenes
+let az=-1.05, el=0.62, dist=16, tgt=new THREE.Vector3(0,0.6,0);
+function place(){views.forEach(v=>{
+  v.cam.position.set(tgt.x+dist*Math.cos(el)*Math.sin(az), tgt.y+dist*Math.sin(el), tgt.z+dist*Math.cos(el)*Math.cos(az));
+  v.cam.lookAt(tgt);});}
+views.forEach(v=>{
+  const c=v.canvas, ptrs=new Map(); let pinch0=null, pan=false;
+  c.addEventListener('contextmenu',e=>e.preventDefault());
+  c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    pan=e.button===2||e.shiftKey;
+    if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch0={d:Math.hypot(a.x-b.x,a.y-b.y),dist};}});
+  c.addEventListener('pointermove',e=>{const p=ptrs.get(e.pointerId); if(!p)return;
+    const dx=e.clientX-p.x, dy=e.clientY-p.y; ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(ptrs.size===2&&pinch0){const [a,b]=[...ptrs.values()];
+      dist=Math.max(1.5,Math.min(40,pinch0.dist*pinch0.d/Math.max(1,Math.hypot(a.x-b.x,a.y-b.y))));place();return;}
+    if(pan){const k=dist*0.0016, r=new THREE.Vector3().setFromMatrixColumn(v.cam.matrix,0), f=new THREE.Vector3(Math.sin(az),0,Math.cos(az));
+      tgt.addScaledVector(r,-dx*k).addScaledVector(f,-dy*k);}
+    else{az-=dx*0.006; el=Math.max(0.03,Math.min(1.55,el+dy*0.005));}
+    place();});
+  const up=e=>{ptrs.delete(e.pointerId); if(ptrs.size<2)pinch0=null;};
+  c.addEventListener('pointerup',up); c.addEventListener('pointercancel',up);
+  c.addEventListener('wheel',e=>{e.preventDefault(); dist=Math.max(1.5,Math.min(40,dist*(1+Math.sign(e.deltaY)*0.09))); place();},{passive:false});
+});
+
+// ---------- overlays: the meshes rendered through camera 0's calibration ----------
+const overlays=METHODS.map(m=>{
+  const canvas=rows[m.key].ov;
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setClearColor(0x000000,0);
+  const scene=new THREE.Scene(); lights(scene);
+  const cam=new THREE.Camera(); cam.matrixAutoUpdate=false;
+  return {key:m.key, canvas, renderer, scene, cam};
+});
+function setOverlayCam(id){
+  const c=CAMS[id], R=c.R, T=c.T, n=0.1, f=200;
+  const E=new THREE.Matrix4().set(R[0][0],R[0][1],R[0][2],T[0], R[1][0],R[1][1],R[1][2],T[1], R[2][0],R[2][1],R[2][2],T[2], 0,0,0,1);
+  const Tinv=new THREE.Matrix4().set(-1,0,0,0, 0,-1,0,FLOOR, 0,0,1,0, 0,0,0,1);   // three.js scene -> calibration world
+  const view=new THREE.Matrix4().makeScale(1,-1,-1).multiply(E).multiply(Tinv);       // OpenCV camera -> GL camera
+  const P=new THREE.Matrix4().set(2*c.fx/c.W,0,1-2*c.cx/c.W,0, 0,2*c.fy/c.H,2*c.cy/c.H-1,0,
+    0,0,-(f+n)/(f-n),-2*f*n/(f-n), 0,0,-1,0);
+  overlays.forEach(o=>{o.cam.matrix.copy(view).invert(); o.cam.updateMatrixWorld(true);
+    o.cam.projectionMatrix.copy(P); o.cam.projectionMatrixInverse.copy(P).invert();});
+}
+function resize(){
+  views.forEach(v=>{const w=v.canvas.clientWidth||800, h=v.canvas.clientHeight||500;
+    v.renderer.setSize(w,h,false); v.cam.aspect=w/h; v.cam.updateProjectionMatrix();});
+  overlays.forEach(o=>o.renderer.setSize(o.canvas.clientWidth||800,o.canvas.clientHeight||500,false));
+}
+
+// ---------- per-method playback ----------
+function fillGeo(g,V,lo,sc,f){
+  const n=META.nverts, off=f*n*3, pos=g.attributes.position.array;
+  for(let i=0;i<n;i++){const o=off+i*3;
+    pos[i*3]=-(V[o]*sc[0]+lo[0]); pos[i*3+1]=FLOOR-(V[o+1]*sc[1]+lo[1]); pos[i*3+2]=V[o+2]*sc[2]+lo[2];}
+  g.attributes.position.needsUpdate=true; g.computeVertexNormals(); g.computeBoundingSphere();
+}
+function setFrame(row,f){
+  f=Math.max(0,Math.min(NF-1,f|0)); if(f===row.cur)return;
+  row.cur=f;
+  if(VERT[row.key]['1'])PL.forEach(p=>{const q=META.players[p][row.key]; fillGeo(geo[row.key][p],VERT[row.key][p],q.lo,q.scale,f);});
+  row.fnum.textContent=String(f).padStart(3,'0'); row.tsec.textContent=(f/FPS).toFixed(2);
+  if(+row.scrub.value!==f)row.scrub.value=f;
+}
+Object.values(rows).forEach(row=>{
+  const v=row.video;
+  const pause=()=>{row.playing=false; v.pause(); row.play.textContent='播放'; row.play.setAttribute('aria-pressed','false');};
+  row.pause=pause;
+  row.play.addEventListener('click',()=>{
+    if(row.playing){pause();return;}
+    if(v.ended||row.cur>=NF-1)v.currentTime=0;
+    row.playing=true; v.playbackRate=row.rate; v.play().catch(()=>{});
+    row.play.textContent='暫停'; row.play.setAttribute('aria-pressed','true');
+  });
+  row.scrub.addEventListener('input',()=>{pause(); const f=+row.scrub.value; try{v.currentTime=(f+0.5)/FPS;}catch(e){} setFrame(row,f);});
+  row.speeds.forEach(b=>b.addEventListener('click',()=>{
+    row.speeds.forEach(o=>o.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true');
+    row.rate=+b.dataset.r; v.playbackRate=row.rate;}));
+  v.addEventListener('ended',pause);
+  v.addEventListener('loadedmetadata',()=>{v.currentTime=(Math.max(row.cur,0)+0.5)/FPS;});
+});
+
+// ---------- data ----------
+async function boot(){
+  [META,CAMS]=await Promise.all(['meta.json','cams.json'].map(n=>fetch(n).then(r=>{if(!r.ok)throw new Error(n+' '+r.status);return r.json();})));
+  NF=META.nf; F0=META.f0; FPS=META.fps;
+  Object.values(rows).forEach(row=>{row.fmax.textContent=NF-1; row.scrub.max=NF-1;});
+  setOverlayCam(CAM);
+  const url=await fetch(`view${CAM}.mp4`).then(r=>{if(!r.ok)throw 0;return r.blob();}).then(b=>URL.createObjectURL(b)).catch(()=>`view${CAM}.mp4`);
+  Object.values(rows).forEach(row=>row.video.src=url);
+  views.forEach(v=>Object.keys(CAMS).forEach(id=>{
+    const c=CAMS[id], p=W2T(...c.C), col=new THREE.Color(c.side==='left'?COL['0']():COL['1']());
+    const box=new THREE.Mesh(new THREE.BoxGeometry(.34,.24,.24),new THREE.MeshStandardMaterial({color:col,roughness:.7}));
+    box.position.set(...p); const d=c.R[2], q=W2T(c.C[0]+d[0]*2,c.C[1]+d[1]*2,c.C[2]+d[2]*2); box.lookAt(...q);
+    v.camG.add(box); v.camG.add(seg([p,q],col,.8));
+  }));
+  const faces=Uint16Array.from(await fetch('faces.json').then(r=>r.json()));
+  ['hf','gt'].forEach(k=>PL.forEach(p=>{
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(META.nverts*3),3));
+    g.setIndex(new THREE.BufferAttribute(faces,1)); geo[k][p]=g;}));
+  views.forEach(v=>PL.forEach(p=>v.scene.add(new THREE.Mesh(geo[v.key][p],mat[p]))));
+  overlays.forEach(o=>PL.forEach(p=>o.scene.add(new THREE.Mesh(geo[o.key][p],ovMat[p]))));
+  // raw uint16 vertex arrays: verts_*.bin (GitHub Pages, local server); the claude.ai copy names them .wasm
+  // only because that host serves that extension as binary
+  const getVerts=(k,p)=>fetch(`verts_${k}_p${p}.bin`).then(r=>r.ok?r:fetch(`verts_${k}_p${p}.wasm`));
+  await Promise.all(['hf','gt'].map(k=>Promise.all(PL.map(p=>getVerts(k,p)
+    .then(r=>{if(!r.ok)throw new Error(`verts_${k}_p${p} ${r.status}`);return r.arrayBuffer();})
+    .then(b=>{VERT[k][p]=new Uint16Array(b);}))).then(()=>{
+      const row=rows[k], f=Math.max(row.cur,0); row.cur=-1; rows[k].loading.hidden=true; setFrame(row,f);})));
+}
+
+function loop(){
+  requestAnimationFrame(loop);
+  Object.values(rows).forEach(row=>{if(row.playing)setFrame(row,Math.floor(row.video.currentTime*FPS));});
+  views.forEach(v=>v.renderer.render(v.scene,v.cam));
+  if(CAMS)overlays.forEach(o=>o.renderer.render(o.scene,o.cam));
+}
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{
+  views.forEach(v=>v.scene.background=new THREE.Color(tok('--scene-bg')));
+  PL.forEach(p=>{mat[p].color.set(COL[p]()); ovMat[p].color.set(COL[p]());});
+});
+const ro=new ResizeObserver(resize);
+views.forEach(v=>ro.observe(v.canvas)); overlays.forEach(o=>ro.observe(o.canvas));
+resize(); place(); requestAnimationFrame(loop);
+boot().catch(err=>{Object.values(rows).forEach(r=>{r.loading.hidden=false; r.loading.textContent='資料載入失敗：'+err.message;});});
+})();
+</script>
