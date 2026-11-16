@@ -78,7 +78,7 @@ button:focus-visible,input:focus-visible,canvas:focus-visible{outline:2px solid 
 const FLOOR=0.5;            // world origin is 0.5 m above the floor, y points down
 const CAM='0';              // the one camera shown
 const METHODS=[{key:'hf', name:'HeatFormer 5 鏡頭', tag:'ft_B_1103_v1'},
-               {key:'gt', name:'MAMMA', tag:'1103_smpl'}];
+               {key:'gt', name:'MAMMA (pseudo GT)', tag:'1103_smpl'}];
 const PL=['0','1'];
 const tok=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const COL={'0':()=>tok('--pA')||'#e07b24','1':()=>tok('--pB')||'#2f6fe0'};
